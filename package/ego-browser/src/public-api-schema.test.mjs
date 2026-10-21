@@ -18,6 +18,7 @@ test("the public API schema contains the v2 entry points and object methods", ()
     "TaskSpace.userPage",
     "TaskSpace.pages",
     "TaskSpace.tabs",
+    "TaskSpace.groupTabs",
     "TaskSpace.newPage",
     "TaskSpace.finish",
     "Page.snapshot",
@@ -131,5 +132,58 @@ test("schema-driven option validation rejects unknown and invalid fields", () =>
   assert.throws(
     () => validatePublicApiOptions("TaskSpace.finish", { keep: ["p2", "p2"] }),
     /keep must be "all" or an array of unique non-empty Page labels/,
+  );
+});
+
+test("groupTabs option validation accepts valid grouping and rejects bad input", () => {
+  validatePublicApiOptions("TaskSpace.groupTabs", {});
+  validatePublicApiOptions("TaskSpace.groupTabs", { by: "domain" });
+  validatePublicApiOptions("TaskSpace.groupTabs", {
+    by: ["domain", "active"],
+  });
+  validatePublicApiOptions("TaskSpace.groupTabs", {
+    groups: [{ name: "开发", domains: ["github.com"], active: true }],
+  });
+  validatePublicApiOptions("TaskSpace.groupTabs", {
+    by: "title",
+    groups: [{ name: "邮件", titleKeywords: ["inbox"] }],
+  });
+
+  assert.throws(
+    () => validatePublicApiOptions("TaskSpace.groupTabs", { by: "cursor" }),
+    /by must be one of domain, subdomain, title, active, openedBy/,
+  );
+  assert.throws(
+    () => validatePublicApiOptions("TaskSpace.groupTabs", { by: [] }),
+    /by must be one of domain, subdomain, title, active, openedBy/,
+  );
+  assert.throws(
+    () =>
+      validatePublicApiOptions("TaskSpace.groupTabs", {
+        by: ["domain", "bogus"],
+      }),
+    /by must be one of domain, subdomain, title, active, openedBy/,
+  );
+  assert.throws(
+    () => validatePublicApiOptions("TaskSpace.groupTabs", { groups: [] }),
+    /groups must be an array of group rules/,
+  );
+  assert.throws(
+    () =>
+      validatePublicApiOptions("TaskSpace.groupTabs", {
+        groups: [{ okay: true }],
+      }),
+    /groups must be an array of group rules/,
+  );
+  assert.throws(
+    () =>
+      validatePublicApiOptions("TaskSpace.groupTabs", {
+        groups: [{ name: "x", active: "yes" }],
+      }),
+    /groups must be an array of group rules/,
+  );
+  assert.throws(
+    () => validatePublicApiOptions("TaskSpace.groupTabs", { nope: 1 }),
+    /unknown option: nope/,
   );
 });

@@ -121,6 +121,11 @@ import {
   validatePublicApiOptions,
 } from "./public-api-schema.js";
 import { parseRef, type RefMap } from "./ref-map.js";
+import {
+  groupTabs as computeGroupedTabs,
+  type GroupTabsOptions,
+  type TabGroup,
+} from "./tab-groups.js";
 import { state } from "./state.js";
 
 type TaskSpaceDescriptor = {
@@ -266,8 +271,7 @@ type PageFetchPayload = {
 };
 
 type PageFetchResult =
-  | (PageFetchResponse & { bodyBase64?: string })
-  | { fetchError: string };
+  (PageFetchResponse & { bodyBase64?: string }) | { fetchError: string };
 
 type PageTarget = {
   spaceId: number;
@@ -988,6 +992,28 @@ class TaskSpace {
       const { ledger, tabs } = await this.#reconcilePages();
       return tabInventory(this, this.#services, ledger, tabs);
     });
+  }
+
+  /**
+   * Group this space's tabs by automated dimensions (domain/subdomain/title/
+   * active/openedBy) or explicit rules, returning lightweight per-tab
+   * summaries without Page handles. Rule groups win over automated grouping,
+   * and tabs that match no rule fall through to the `by` dimensions.
+   */
+  async groupTabs(options: GroupTabsOptions = {}): Promise<TabGroup[]> {
+    validatePublicApiOptions("TaskSpace.groupTabs", options);
+    const items = await this.tabs();
+    return computeGroupedTabs(
+      items.map((item) => ({
+        targetId: item.targetId,
+        label: item.label,
+        title: item.title,
+        url: item.url,
+        active: item.active,
+        openedBy: item.openedBy,
+      })),
+      options,
+    );
   }
 
   /** Wait until this space is controllable without taking control from the user. */

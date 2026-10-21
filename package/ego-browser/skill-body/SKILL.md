@@ -154,7 +154,7 @@ use `help("profiles")` for the exact workflow.
 Supported TaskSpace API:
 
 - State: `spaceId`, `name`, `ownership`, `page(label)`, `userPage()`
-- Pages: `await task.pages()`, `await task.tabs()`, `newPage()`,
+- Pages: `await task.pages()`, `await task.tabs()`, `await task.groupTabs({ by?, groups? })`, `newPage()`,
   `adopt(page, { as? })`, `release(label)`
 - Control: `waitForControl(options)`, `handOff()`, `finish({ keep })`
 - Advanced: `cdp(method, params, options)`
@@ -186,6 +186,26 @@ if (active && !active.label) {
 `release(label)` returns an unknown-origin Page to the user without closing its
 tab. Close Agent-created Pages with `page.close()`. Treat `openedBy: "unknown"`
 as user-owned when deciding whether a Page may be closed.
+
+`await task.groupTabs({ by?, groups? })` groups the space's tabs and returns
+lightweight summaries (no Page handles): `{ name, count, tabs: [{ label?,
+targetId, title, url, active, openedBy }] }`. `by` is the automated grouping
+dimension or an ordered list of them — `"domain"` (default), `"subdomain"`,
+`"title"` (first title keyword), `"active"`, `"openedBy"` — applied left to
+right so `["domain", "active"]` nests by domain then activity. `groups` assigns
+tabs to named rule groups (`{ name, domains?, titleKeywords?, active?,
+openedBy? }`, first match wins) and those groups come first. A tab that matches
+no rule falls through to the `by` dimensions. Use this to organize a cluttered
+space, then act on a group's tabs with the existing Page APIs:
+
+```js
+// Group my news tabs by domain, then observe the first one in the group.
+const groups = await task.groupTabs({ by: "domain" });
+const news = groups.find((g) => g.name === "news.ycombinator.com");
+if (news?.tabs[0]?.label) {
+  console.log(await task.page(news.tabs[0].label).snapshot());
+}
+```
 
 ## Page operations
 

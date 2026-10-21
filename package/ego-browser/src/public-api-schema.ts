@@ -1,3 +1,5 @@
+import { TAB_GROUP_DIMENSIONS } from "./tab-groups.js";
+
 export type PublicApiOptionKind =
   | "boolean"
   | "clip"
@@ -9,6 +11,8 @@ export type PublicApiOptionKind =
   | "positiveMilliseconds"
   | "string"
   | "stringRecord"
+  | "tabGroupBy"
+  | "tabGroupRules"
   | "point";
 
 export type PublicApiOption = {
@@ -127,6 +131,22 @@ export const PUBLIC_API_SCHEMA: readonly PublicApiEntry[] = [
     name: "TaskSpace.tabs",
     signature: "await task.tabs()",
     summary: "List managed Pages and unmanaged tabs in this space.",
+  },
+  {
+    name: "TaskSpace.groupTabs",
+    signature: "await task.groupTabs({ by?, groups? })",
+    summary:
+      "Group this space's tabs by domain/subdomain/title/activity/origin or explicit rules, returning lightweight summaries per group (no Page handles).",
+    options: {
+      by: option(
+        "tabGroupBy",
+        "Automated grouping dimension(s), applied left-to-right; default is domain.",
+      ),
+      groups: option(
+        "tabGroupRules",
+        "Explicit rule groups (name plus domains/titleKeywords/active/openedBy); first match wins.",
+      ),
+    },
   },
   {
     name: "TaskSpace.newPage",
@@ -751,6 +771,19 @@ function validateOptionValue(
         isPlainObject(value) &&
         Object.values(value).every((item) => typeof item === "string");
       break;
+    case "tabGroupBy":
+      valid =
+        isValidDimension(value) ||
+        (Array.isArray(value) &&
+          value.length > 0 &&
+          value.every(isValidDimension));
+      break;
+    case "tabGroupRules":
+      valid =
+        Array.isArray(value) &&
+        value.length > 0 &&
+        value.every(isValidGroupRule);
+      break;
     case "point":
       valid = isPoint(value);
       break;
@@ -784,6 +817,16 @@ function validateOptionValue(
         `${apiName} ${optionName} must be an object with string values`,
       );
     }
+    if (specification.kind === "tabGroupBy") {
+      throw new TypeError(
+        `${apiName} ${optionName} must be one of ${TAB_GROUP_DIMENSIONS.join(", ")} or an array of them`,
+      );
+    }
+    if (specification.kind === "tabGroupRules") {
+      throw new TypeError(
+        `${apiName} ${optionName} must be an array of group rules ({ name, domains?, titleKeywords?, active?, openedBy? })`,
+      );
+    }
     throw new TypeError(
       `${apiName} ${optionName} must be ${specification.kind}`,
     );
@@ -797,6 +840,56 @@ function validateOptionValue(
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function isValidDimension(value: unknown): value is string {
+  return (
+    typeof value === "string" &&
+    (TAB_GROUP_DIMENSIONS as readonly string[]).includes(value)
+  );
+}
+
+function isValidGroupRule(value: unknown): boolean {
+  if (!isPlainObject(value)) return false;
+  if (typeof value.name !== "string" || value.name.length === 0) return false;
+  const keys = new Set(Object.keys(value));
+  const allowed = new Set([
+    "name",
+    "domains",
+    "titleKeywords",
+    "active",
+    "openedBy",
+  ]);
+  if (![...keys].every((key) => allowed.has(key))) return false;
+  if (
+    value.domains !== undefined &&
+    !(
+      Array.isArray(value.domains) &&
+      value.domains.every((d) => typeof d === "string" && d.length > 0)
+    )
+  ) {
+    return false;
+  }
+  if (
+    value.titleKeywords !== undefined &&
+    !(
+      Array.isArray(value.titleKeywords) &&
+      value.titleKeywords.every((k) => typeof k === "string" && k.length > 0)
+    )
+  ) {
+    return false;
+  }
+  if (value.active !== undefined && typeof value.active !== "boolean") {
+    return false;
+  }
+  if (
+    value.openedBy !== undefined &&
+    value.openedBy !== "agent" &&
+    value.openedBy !== "unknown"
+  ) {
+    return false;
+  }
+  return true;
 }
 
 function isPoint(value: unknown): boolean {
